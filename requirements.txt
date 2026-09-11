@@ -1,0 +1,4 @@
+deepeval
+langchain
+langchain-openai
+python-dotenv
