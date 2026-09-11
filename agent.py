@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain.tools import tool
 from langchain_openai import ChatOpenAI
+from langfuse import get_client
+from langfuse.langchain import CallbackHandler
 
 load_dotenv()
 
@@ -63,10 +65,39 @@ def build_agent():
     )
 
 
+def _langfuse_callback() -> CallbackHandler | None:
+    """Return an observability callback only when Langfuse is configured.
+
+    Keeping tracing optional makes the public example runnable without
+    placeholder credentials while allowing GitHub Actions to send traces when
+    repository secrets are configured.
+    """
+    if os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
+        return CallbackHandler()
+    return None
+
+
 def run_agent(question: str) -> str:
-    """Run the agent and return its final text response."""
-    result = build_agent().invoke({"messages": [{"role": "user", "content": question}]})
-    return str(result["messages"][-1].content)
+    """Run the agent, optionally trace it in Langfuse, and return final text."""
+    callback = _langfuse_callback()
+    config: dict[str, Any] = {
+        "metadata": {
+            "langfuse_tags": ["github-example", "calculator-agent"],
+        }
+    }
+    if callback:
+        config["callbacks"] = [callback]
+
+    try:
+        result = build_agent().invoke(
+            {"messages": [{"role": "user", "content": question}]},
+            config=config,
+        )
+        return str(result["messages"][-1].content)
+    finally:
+        # Ensure a short-lived local script or CI job exports its trace before exit.
+        if callback:
+            get_client().flush()
 
 
 if __name__ == "__main__":
