@@ -1,5 +1,4 @@
 deepeval
 langchain
 langchain-openai
-langfuse
 python-dotenv
